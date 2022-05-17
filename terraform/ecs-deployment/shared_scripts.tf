@@ -2,10 +2,11 @@ locals {
   get_aws_resources = <<-EOT
       # Get the containers
       echo "Downloading Docker images"
+
       echo "##octopus[stdout-verbose]"
+
       docker pull amazon/aws-cli 2>&1
       docker pull imega/jq 2>&1
-      echo "##octopus[stdout-default]"
 
       # Alias the docker run commands
       shopt -s expand_aliases
@@ -25,7 +26,9 @@ locals {
       SECURITYGROUP=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$${VPC} Name=group-name,Values=default | jq -r '.SecurityGroups[].GroupId')
 
       # The load balancer listener was created by the infrastructure deployment project, and is read from the CloudFormation stack outputs.
-      LISTENER=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LoadBalancer-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='Listener'].OutputValue" --output text)
+      LISTENER=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='Listener'].OutputValue" --output text)
+
+      echo "##octopus[stdout-default]"
 
       echo "Found Security Group: $${SECURITYGROUP}"
       echo "Found Subnet A: $${SUBNETA}"
