@@ -86,7 +86,6 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
           ENVIRONMENT="#{Octopus.Environment.Name | ToLower}"
           ENVIRONMENT_ARRAY=($ENVIRONMENT)
           FIXED_ENVIRONMENT=$${ENVIRONMENT_ARRAY[0]}
-          set_octopusvariable "FixedEnvironment" "$${FIXED_ENVIRONMENT}"
 
           # Create the cluster using the instructions from https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-cli-tutorial-fargate.html
           EXISTING=$(aws iam list-roles --max-items 10000 | jq -r '.Roles[] | select(.RoleName == "ecsTaskExecutionRole") | .Arn')
@@ -181,6 +180,30 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
   }
   step {
     condition           = "Success"
+    name                = "Get AWS Resources"
+    package_requirement = "LetOctopusDecide"
+    start_trigger       = "StartAfterPrevious"
+    target_roles        = []
+    action {
+      action_type    = "Octopus.AwsRunScript"
+      name           = "Get AWS Resources"
+      notes          = "Queries AWS for the subnets, security groups, and IAM roles."
+      run_on_server  = true
+      worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
+      properties     = {
+        "OctopusUseBundledTooling" : "False",
+        "Octopus.Action.Script.ScriptSource" : "Inline",
+        "Octopus.Action.Script.Syntax" : "Bash",
+        "Octopus.Action.Aws.AssumeRole" : "False",
+        "Octopus.Action.AwsAccount.UseInstanceRole" : "False",
+        "Octopus.Action.AwsAccount.Variable" : "AWS Account",
+        "Octopus.Action.Aws.Region" : var.aws_region,
+        "Octopus.Action.Script.ScriptBody" : local.get_aws_resources
+      }
+    }
+  }
+  step {
+    condition           = "Success"
     name                = "Deploy Load Balancer"
     package_requirement = "LetOctopusDecide"
     start_trigger       = "StartAfterPrevious"
@@ -209,7 +232,7 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
       properties = {
         "Octopus.Action.Aws.AssumeRole" : "False"
         "Octopus.Action.Aws.CloudFormation.Tags" : "[]"
-        "Octopus.Action.Aws.CloudFormationStackName" : "AppBuilder-ECS-LoadBalancer-${lower(var.github_repo_owner)}-#{Octopus.Action[Create an ECS Cluster].Output.FixedEnvironment}"
+        "Octopus.Action.Aws.CloudFormationStackName" : "AppBuilder-ECS-LoadBalancer-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
         "Octopus.Action.Aws.CloudFormationTemplate" : <<-EOT
           Parameters:
             Vpc:
