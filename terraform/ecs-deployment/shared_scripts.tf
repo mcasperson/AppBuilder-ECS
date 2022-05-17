@@ -1,5 +1,5 @@
 locals {
-  get_aws_resources: <<-EOT
+  get_aws_resources= <<-EOT
       # Get the containers
       echo "Downloading Docker images"
       echo "##octopus[stdout-verbose]"
