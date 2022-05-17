@@ -339,34 +339,9 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
           ENVIRONMENT_ARRAY=($ENVIRONMENT)
           FIXED_ENVIRONMENT=$${ENVIRONMENT_ARRAY[0]}
 
-          # Get the first task on the cluster
-          TASKS=$(aws ecs list-tasks --cluster app-builder-mcasperson-development | jq -r '[.taskArns[]]| join(" ")')
-          TASK=$(aws ecs describe-tasks --cluster app-builder-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT} --tasks $${TASKS} | jq -r '.tasks[] | select(.group | startswith("service:OctopubFrontend")) | .taskArn')
-          echo "Found Task $${TASK}"
+          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='Listener'].DNSName" --output text)
 
-          if [[ "$${TASK}" == "null" || -z "$${TASK}" ]]; then
-            echo "Unable to find the task"
-            exit 0
-          fi
-
-          # Get the network interface
-          ENI=$(aws ecs describe-tasks --cluster app-builder-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT} --tasks $${TASK} | jq -r '.tasks[0].attachments[].details[] | select(.name == "networkInterfaceId") | .value')
-          echo "Found Elastic Network Interface $${ENI}"
-
-          if [[ "$${ENI}" == "null" || -z "$${ENI}" ]]; then
-            echo "Unable to find the ENI"
-            exit 0
-          fi
-
-          # Get the public IP
-          IP=$(aws ec2 describe-network-interfaces --network-interface-ids $${ENI} | jq -r '.NetworkInterfaces[0].Association.PublicIp')
-
-          if [[ "$${IP}" == "null" || -z "$${IP}" ]]; then
-            echo "Unable to find the IP"
-            exit 0
-          fi
-
-          echo "Open [http://$${IP}:5000/index.html](http://$${IP}:5000/index.html) to view the frontend webapp."
+          echo "Open [http://$${DNSNAME}/index.html](http://$${DNSNAME}/index.html) to view the frontend webapp."
         EOT
       }
     }
