@@ -341,7 +341,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
           ENVIRONMENT_ARRAY=($ENVIRONMENT)
           FIXED_ENVIRONMENT=$${ENVIRONMENT_ARRAY[0]}
 
-          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='Listener'].DNSName" --output text)
+          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
 
           echo "Open [http://$${DNSNAME}/api/products](http://$${DNSNAME}/api/products) to view the backend API."
         EOT
