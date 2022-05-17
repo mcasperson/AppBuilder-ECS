@@ -50,8 +50,8 @@ resource "octopusdeploy_variable" "aws_account_deploy_frontend_project" {
 }
 
 locals {
-  package_name = "frontend"
-  port         = "5000"
+  frontend_package_name = "frontend"
+  frontend_port         = "5000"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend" {
@@ -137,7 +137,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
         data.octopusdeploy_environments.production.environments[0].id
       ]
       package {
-        name                      = local.package_name
+        name                      = local.frontend_package_name
         package_id                = var.frontend_docker_image
         feed_id                   = var.octopus_k8s_feed_id
         acquisition_location      = "NotAcquired"
@@ -191,20 +191,20 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
               Properties:
                 ContainerDefinitions:
                   - Essential: true
-                    Image: '#{Octopus.Action.Package[${local.package_name}].Image}'
+                    Image: '#{Octopus.Action.Package[${local.frontend_package_name}].Image}'
                     Name: backend
                     ResourceRequirements: []
                     Environment:
                       - Name: PORT
-                        Value: !!str "${local.port}"
+                        Value: !!str "${local.frontend_port}"
                     EnvironmentFiles: []
                     DisableNetworking: false
                     DnsServers: []
                     DnsSearchDomains: []
                     ExtraHosts: []
                     PortMappings:
-                      - ContainerPort: ${local.port}
-                        HostPort: ${local.port}
+                      - ContainerPort: ${local.frontend_port}
+                        HostPort: ${local.frontend_port}
                         Protocol: tcp
                     LogConfiguration:
                       LogDriver: awslogs

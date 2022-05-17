@@ -54,8 +54,8 @@ resource "octopusdeploy_variable" "aws_account_deploy_backend_project" {
 }
 
 locals {
-  package_name = "backend"
-  port         = "8083"
+  backend_package_name = "backend"
+  backend_port         = "8083"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend" {
@@ -141,7 +141,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
         data.octopusdeploy_environments.production.environments[0].id
       ]
       package {
-        name                      = local.package_name
+        name                      = local.backend_package_name
         package_id                = var.backend_docker_image
         feed_id                   = var.octopus_k8s_feed_id
         acquisition_location      = "NotAcquired"
@@ -195,20 +195,20 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
               Properties:
                 ContainerDefinitions:
                   - Essential: true
-                    Image: '#{Octopus.Action.Package[${local.package_name}].Image}'
+                    Image: '#{Octopus.Action.Package[${local.backend_package_name}].Image}'
                     Name: backend
                     ResourceRequirements: []
                     Environment:
                       - Name: PORT
-                        Value: !!str "${local.port}"
+                        Value: !!str "${local.backend_port}"
                     EnvironmentFiles: []
                     DisableNetworking: false
                     DnsServers: []
                     DnsSearchDomains: []
                     ExtraHosts: []
                     PortMappings:
-                      - ContainerPort: ${local.port}
-                        HostPort: ${local.port}
+                      - ContainerPort: ${local.backend_port}
+                        HostPort: ${local.backend_port}
                         Protocol: tcp
                     LogConfiguration:
                       LogDriver: awslogs
