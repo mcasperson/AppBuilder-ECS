@@ -54,7 +54,7 @@ locals {
   frontend_port         = "5000"
 }
 
-resource "octopusdeploy_deployment_process" "deploy_backend" {
+resource "octopusdeploy_deployment_process" "deploy_frontend" {
   project_id = octopusdeploy_project.deploy_backend_project.id
   step {
     condition           = "Success"
