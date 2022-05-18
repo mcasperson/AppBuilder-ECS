@@ -356,30 +356,26 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
   }
   step {
     condition           = "Success"
-    name                = "Find the LoadBalancer URL"
+    name                = "HTTP Smoke Test"
     package_requirement = "LetOctopusDecide"
     start_trigger       = "StartAfterPrevious"
-    target_roles        = []
-    action {
-      action_type    = "Octopus.AwsRunScript"
-      name           = "Find the LoadBalancer URL"
-      notes          = "Queries the task for the public IP address."
-      run_on_server  = true
-      worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
-      environments   = [
+    run_script_action {
+      can_be_used_for_project_versioning = false
+      condition                          = "Success"
+      is_disabled                        = false
+      is_required                        = true
+      script_syntax                      = "Bash"
+      script_source                      = "Inline"
+      run_on_server                      = true
+      worker_pool_id                     = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
+      name                               = "HTTP Smoke Test"
+      notes                              = "Use curl to perform a smoke test of a HTTP endpoint."
+      environments                       = [
         data.octopusdeploy_environments.development.environments[0].id,
         data.octopusdeploy_environments.production.environments[0].id
       ]
-      properties     = {
-        "OctopusUseBundledTooling" : "False",
-        "Octopus.Action.Script.ScriptSource" : "Inline",
-        "Octopus.Action.Script.Syntax" : "Bash",
-        "Octopus.Action.Aws.AssumeRole" : "False",
-        "Octopus.Action.AwsAccount.UseInstanceRole" : "False",
-        "Octopus.Action.AwsAccount.Variable" : "AWS Account",
-        "Octopus.Action.Aws.Region" : var.aws_region,
-        "Octopus.Action.Script.ScriptBody" : <<-EOT
-          CODE=$(curl -o /dev/null -s -w "%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.FixedEnvironment/health/products/GET)
+      script_body = <<-EOT
+          CODE=$(curl -o /dev/null -s -w "%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.FixedEnvironment}/health/products/GET)
 
           echo "response code:$code"
           if [ "$code" == "200" ]
@@ -391,7 +387,6 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
             exit 1;
           fi
         EOT
-      }
     }
   }
   step {
