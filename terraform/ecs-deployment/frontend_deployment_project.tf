@@ -372,7 +372,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
           CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/index.html)
 
           echo "response code:$code"
-          if [ "$code" == "200" ]
+          if [ "$${CODE}" == "200" ]
           then
             echo "success"
             exit 0;
