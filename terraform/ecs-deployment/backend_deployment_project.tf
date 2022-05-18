@@ -377,7 +377,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
       script_body = <<-EOT
           CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/health/products/GET)
 
-          echo "response code:$code"
+          echo "response code: $${CODE}"
           if [ "$${CODE}" == "200" ]
           then
             echo "success"
