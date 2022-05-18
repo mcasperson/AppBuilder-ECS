@@ -281,6 +281,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
               Type: String
             SecurityGroup:
               Type: String
+            Vpc:
+              Type: String
+            Listener:
+              Type: String
           Outputs:
             ServiceName:
               Description: The service name
@@ -301,13 +305,13 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
   }
   step {
     condition           = "Success"
-    name                = "Find the Task IP Address"
+    name                = "Find the LoadBalancer URL"
     package_requirement = "LetOctopusDecide"
     start_trigger       = "StartAfterPrevious"
     target_roles        = []
     action {
       action_type    = "Octopus.AwsRunScript"
-      name           = "Find the Task IP Address"
+      name           = "Find the LoadBalancer URL"
       notes          = "Queries the task for the public IP address."
       run_on_server  = true
       worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
