@@ -347,7 +347,49 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
 
           DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
 
+          set_octopusvariable "DNSName" "$${DNSNAME}"
+
           echo "Open [http://$${DNSNAME}/api/products](http://$${DNSNAME}/api/products) to view the backend API."
+        EOT
+      }
+    }
+  }
+  step {
+    condition           = "Success"
+    name                = "Find the LoadBalancer URL"
+    package_requirement = "LetOctopusDecide"
+    start_trigger       = "StartAfterPrevious"
+    target_roles        = []
+    action {
+      action_type    = "Octopus.AwsRunScript"
+      name           = "Find the LoadBalancer URL"
+      notes          = "Queries the task for the public IP address."
+      run_on_server  = true
+      worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
+      environments   = [
+        data.octopusdeploy_environments.development.environments[0].id,
+        data.octopusdeploy_environments.production.environments[0].id
+      ]
+      properties     = {
+        "OctopusUseBundledTooling" : "False",
+        "Octopus.Action.Script.ScriptSource" : "Inline",
+        "Octopus.Action.Script.Syntax" : "Bash",
+        "Octopus.Action.Aws.AssumeRole" : "False",
+        "Octopus.Action.AwsAccount.UseInstanceRole" : "False",
+        "Octopus.Action.AwsAccount.Variable" : "AWS Account",
+        "Octopus.Action.Aws.Region" : var.aws_region,
+        "Octopus.Action.Script.ScriptBody" : <<-EOT
+          CODE=$(curl -o /dev/null -s -w "%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.FixedEnvironment/health/products/GET)
+
+          echo "response code:$code"
+          if [ "$code" == "200" ]
+          then
+            echo "success"
+            exit 0;
+          else
+            echo "error"
+            exit 1;
+          fi
         EOT
       }
     }
