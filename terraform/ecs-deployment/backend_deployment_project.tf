@@ -375,7 +375,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
         data.octopusdeploy_environments.production.environments[0].id
       ]
       script_body = <<-EOT
-          CODE=$(curl -o /dev/null -s -w "%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.FixedEnvironment}/health/products/GET)
+          CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.FixedEnvironment}/health/products/GET)
 
           echo "response code:$code"
           if [ "$code" == "200" ]
