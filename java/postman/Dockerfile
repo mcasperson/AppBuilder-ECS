@@ -3,7 +3,8 @@
 # When run as a tentacle, the Tentacle agent is called to register a worker with an Octopus instance.
 
 FROM postman/newman:5.2.0-ubuntu
-RUN apt-get update; apt-get install -y libicu60
+RUN apt-get update; apt-get install -y libicu60 locales
+RUN locale-gen en_US.UTF-8
 RUN curl -L \
     https://download.octopusdeploy.com/linux-tentacle/tentacle-6.1.1403-linux_x64.tar.gz \
     --output tentacle-linux_x64.tar.gz
