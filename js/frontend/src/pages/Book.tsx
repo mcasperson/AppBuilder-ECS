@@ -34,10 +34,7 @@ const Book: FC<{}> = (): ReactElement => {
             {!book && <div>Loading...</div>}
             {book && <Grid container={true} className={classes.content}>
                 <Grid item md={4} sm={12}>
-                    <img id="coverimage"
-                         className={classes.image}
-                         src={book.data.attributes.image || "https://via.placeholder.com/300x400"}
-                         alt={book.data.attributes.name || ""}/>
+                    <img className={classes.image} src={book.data.attributes.image || "https://via.placeholder.com/300x400"} alt={book.data.attributes.name || ""}/>
                 </Grid>
                 <Grid  item md={8} sm={12}>
                     <h1>{book.data.attributes.name}</h1>
@@ -46,7 +43,6 @@ const Book: FC<{}> = (): ReactElement => {
                     <ul>
                         {book.data.attributes.pdf && <li><a href={book.data.attributes.pdf}>PDF</a></li>}
                         {book.data.attributes.epub && <li><a href={book.data.attributes.epub}>EPUB</a></li>}
-                        {book.data.attributes.web && <li><a href={book.data.attributes.web}>Link</a></li>}
                     </ul>
                 </Grid>
             </Grid>}

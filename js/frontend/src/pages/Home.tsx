@@ -46,11 +46,9 @@ const Home: FC = (): ReactElement => {
                           onClick={() => {
                               history('/book/' + b.id);
                           }}>
-                        <img id={"book" + b.id}
-                             className={classes.image}
+                        <img className={classes.image}
                              src={b.attributes.image || "https://via.placeholder.com/300x400"}
                              alt={b.attributes.name || "Unknown"}/>
-                        <h3 className={classes.bookshelfTitle}>{b.attributes.name}</h3>
                     </Grid>)}
             </Grid>
         </>

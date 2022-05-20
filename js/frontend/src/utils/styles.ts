@@ -1,4 +1,4 @@
-import {makeStyles} from '@mui/styles';
+import { makeStyles } from '@mui/styles';
 import {SxProps} from "@mui/system";
 import {Theme} from "@mui/material/styles";
 
@@ -20,19 +20,14 @@ export const styles = makeStyles((theme) => {
             },
             bookshelfImage: {
                 objectFit: "contain",
-                height: "512px",
+                height: "100%",
                 cursor: "pointer",
                 overflow: "hidden"
-            },
-            bookshelfTitle: {
-                width: "100%",
-                textAlign: "center"
             },
             image: {
                 objectFit: "contain",
                 padding: "64px",
-                width: "100%",
-                maxHeight: "440px"
+                width: "100%"
             },
             content: {
 
