@@ -41,11 +41,6 @@ jobs:
 
       - name: Create Initial Space
         id: shared_space
-        if: >-
-          contains(steps.changed-files.outputs.all_modified_files, 'shared-space') 
-          || contains(steps.changed-files.outputs.all_modified_files, 'shared-infrastructure')
-          || contains(steps.changed-files.outputs.all_modified_files, 'ecr_feed')
-          || contains(steps.changed-files.outputs.all_modified_files, 'ecs-deployment')
         uses: ./github/shared-space
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -60,7 +55,9 @@ jobs:
 
       - name: Create Shared Resources
         id: shared_resources
-        if: contains(steps.changed-files.outputs.all_modified_files, 'shared-infrastructure')
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'shared-infrastructure')
+          || contains(steps.changed-files.outputs.all_modified_files, 'ecs-deployment')
         uses: ./github/shared-infrastructure
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -76,6 +73,9 @@ jobs:
 
       - name: Create the Products ECR repository
         id: ecr_products_resources
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'aws-ecr')
+          || contains(steps.changed-files.outputs.all_modified_files, 'java')
         uses: ./github/aws-ecr-products-service
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -93,6 +93,9 @@ jobs:
 
       - name: Create the Frontend ECR repository
         id: ecr_frontend_resources
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'aws-ecr')
+          || contains(steps.changed-files.outputs.all_modified_files, 'js')
         uses: ./github/aws-ecr-octopus-frontend
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -110,6 +113,9 @@ jobs:
 
       - name: Create the Postman worker ECR repository
         id: ecr_postman_resources
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'aws-ecr')
+          || contains(steps.changed-files.outputs.all_modified_files, 'java')
         uses: ./github/aws-ecr-postman-worker
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -127,6 +133,9 @@ jobs:
 
       - name: Create the Cypress worker ECR repository
         id: ecr_cypress_resources
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'aws-ecr')
+          || contains(steps.changed-files.outputs.all_modified_files, 'js')
         uses: ./github/aws-ecr-postman-worker
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
@@ -145,6 +154,9 @@ jobs:
       - name: Create the ECR feed
         id: ecr_feed
         uses: ./github/ecr-feed
+        if: >-
+          contains(steps.changed-files.outputs.all_modified_files, 'ecr-feed')
+          || contains(steps.changed-files.outputs.all_modified_files, 'ecs-deployment')
         with:
           octopus_server: ${{ secrets.OCTOPUS_SERVER }}
           octopus_apikey: ${{ secrets.OCTOPUS_APIKEY }}
@@ -184,7 +196,7 @@ jobs:
 
       - name: Build JavaScript Frontend
         uses: ./github/js-frontend
-        if: contains(steps.changed-files.outputs.all_modified_files, 'js-frontend')
+        if: contains(steps.changed-files.outputs.all_modified_files, 'js')
         with:
           image_tag: ${{ steps.ecr_frontend_resources.outputs.aws_ecr_repository_url }}
           cypress_image_tag: ${{ steps.ecr_cypress_resources.outputs.aws_ecr_repository_url }}
@@ -201,7 +213,7 @@ jobs:
 
       - name: Build Java Microservice
         uses: ./github/java-microservice
-        if: contains(steps.changed-files.outputs.all_modified_files, 'java-microservice')
+        if: contains(steps.changed-files.outputs.all_modified_files, 'java')
         with:
           image_tag: ${{ steps.ecr_products_resources.outputs.aws_ecr_repository_url }}
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}

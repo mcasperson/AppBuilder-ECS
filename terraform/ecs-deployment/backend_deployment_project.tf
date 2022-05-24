@@ -379,7 +379,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
 
           set_octopusvariable "DNSName" "$${DNSNAME}"
 
-          echo "Open [http://$${DNSNAME}/api/products](http://$${DNSNAME}/api/products) to view the backend API."
+          write_highlight "Open [http://$${DNSNAME}/api/products](http://$${DNSNAME}/api/products) to view the backend API."
         EOT
       }
     }
@@ -405,7 +405,18 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
         data.octopusdeploy_environments.production.environments[0].id
       ]
       script_body = <<-EOT
-          CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/health/products/GET)
+          # Load balancers can take a minute or so before their DNS is propagated.
+          # A status code of 000 means curl could not resolve the DNS name, so we wait for a bit until DNS is updated.
+          for i in {1..60}
+          do
+              CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/health/products/GET)
+              if [[ "$${CODE}" != "000" ]]
+              then
+                break
+              fi
+              echo "Waiting for DNS name to be resolvable"
+              sleep 10
+          done
 
           echo "response code: $${CODE}"
           if [ "$${CODE}" == "200" ]
@@ -455,6 +466,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
         "Octopus.Action.Package.JsonConfigurationVariablesTargets": "**/*.json"
       }
       script_body = <<-EOT
+          echo "##octopus[stdout-verbose]"
+          cat products-microservice-postman/test.json
+          echo "##octopus[stdout-default]"
+
           newman run products-microservice-postman/test.json 2>&1
         EOT
     }

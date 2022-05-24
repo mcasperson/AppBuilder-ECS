@@ -8,8 +8,8 @@ resource "octopusdeploy_project" "deploy_frontend_project" {
   is_discrete_channel_release          = false
   is_version_controlled                = false
   lifecycle_id                         = var.octopus_application_lifecycle_id
-  name                                 = "Deploy Frontend Service"
-  project_group_id                     = octopusdeploy_project_group.backend_project_group.id
+  name                                 = "Deploy Frontend WebApp"
+  project_group_id                     = octopusdeploy_project_group.frontend_project_group.id
   tenanted_deployment_participation    = "Untenanted"
   space_id                             = var.octopus_space_id
   included_library_variable_sets       = []
@@ -356,7 +356,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
 
           set_octopusvariable "DNSName" "$${DNSNAME}"
 
-          echo "Open [http://$${DNSNAME}/index.html](http://$${DNSNAME}/index.html) to view the frontend webapp."
+          write_highlight "Open [http://$${DNSNAME}/index.html](http://$${DNSNAME}/index.html) to view the frontend webapp."
         EOT
       }
     }
@@ -382,7 +382,18 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
         data.octopusdeploy_environments.production.environments[0].id
       ]
       script_body = <<-EOT
-          CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/index.html)
+          # Load balancers can take a minute or so before their DNS is propagated.
+          # A status code of 000 means curl could not resolve the DNS name, so we wait for a bit until DNS is updated.
+          for i in {1..60}
+          do
+              CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/index.html)
+              if [[ "$${CODE}" != "000" ]]
+              then
+                break
+              fi
+              echo "Waiting for DNS name to be resolvable"
+              sleep 10
+          done
 
           echo "response code: $${CODE}"
           if [ "$${CODE}" == "200" ]
@@ -434,10 +445,13 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
       script_body = <<-EOT
           echo "##octopus[stdout-verbose]"
           cd octopub-frontend-cypress
-          cypress run 2>&1
+          OUTPUT=$(cypress run 2>&1)
+          RESULT=$?
           echo "##octopus[stdout-default]"
 
-          RESULT=$?
+          # Print the output stripped of ANSI colour codes
+          echo -e "$${OUTPUT}" | sed 's/\x1b\[[0-9;]*m//g'
+
           if [[ -f mochawesome.html ]]
           then
             inline-assets mochawesome.html selfcontained.html
