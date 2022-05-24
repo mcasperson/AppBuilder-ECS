@@ -151,29 +151,29 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
             echo "ECS Cluster already exists with ARN $${EXISTINGCLUSTER}"
           fi
 
-          # Create the dyanmic target.
+          # An example of how to create the ECS dyanmic target.
           # https://octopus.com/docs/infrastructure/deployment-targets/dynamic-infrastructure/new-octopustarget
           # Note that the ECS deployments are done via CloudFormation in this example project, which does not require
           # an ECS target. However, if you wish to use the "Deploy Amazon ECS Service", this target can be used.
-          read -r -d '' INPUTS <<EOF
-          {
-              "clusterName": "app-builder-${var.github_repo_owner}-$${FIXED_ENVIRONMENT}",
-              "authentication": {
-                "credentials" : {
-                  "type": "account",
-                  "account": "${var.octopus_aws_account_id}"
-                },
-                "role": {
-                  "type": "noAssumedRole"
-                }
-              },
-              "region": "$${AWS_DEFAULT_REGION}"
-          }
-          EOF
+          #read -r -d '' INPUTS <<EOF
+          #{
+          #    "clusterName": "app-builder-${var.github_repo_owner}-$${FIXED_ENVIRONMENT}",
+          #    "authentication": {
+          #      "credentials" : {
+          #        "type": "account",
+          #        "account": "${var.octopus_aws_account_id}"
+          #      },
+          #      "role": {
+          #        "type": "noAssumedRole"
+          #      }
+          #    },
+          #    "region": "$${AWS_DEFAULT_REGION}"
+          #}
+          #EOF
 
-          echo "Creating ECS target"
-          echo "##octopus[stdout-verbose]"
-          new_octopustarget --update-if-existing -n "app-builder" -t "aws-ecs-target" --inputs "$${INPUTS}" --roles "ECS Cluster"
+          #echo "Creating ECS target"
+          #echo "##octopus[stdout-verbose]"
+          #new_octopustarget --update-if-existing -n "app-builder" -t "aws-ecs-target" --inputs "$${INPUTS}" --roles "ECS Cluster"
         EOT
       }
     }
@@ -217,17 +217,6 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
         data.octopusdeploy_environments.development.environments[0].id,
         data.octopusdeploy_environments.production.environments[0].id
       ]
-      package {
-        name                      = local.backend_package_name
-        package_id                = var.backend_docker_image
-        feed_id                   = var.octopus_k8s_feed_id
-        acquisition_location      = "NotAcquired"
-        extract_during_deployment = false
-        properties                = {
-          "SelectionMode" : "immediate",
-          "Purpose" : "DockerImageReference"
-        }
-      }
 
       properties = {
         "Octopus.Action.Aws.AssumeRole" : "False"
