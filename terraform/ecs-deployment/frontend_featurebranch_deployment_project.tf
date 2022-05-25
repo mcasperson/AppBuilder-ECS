@@ -164,11 +164,11 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ALBSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupDescription: "ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
+                GroupName: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
