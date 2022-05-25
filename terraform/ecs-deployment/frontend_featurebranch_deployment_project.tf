@@ -393,7 +393,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 ContainerDefinitions:
                   - Essential: true
                     Image: '#{Octopus.Action.Package[${local.frontend_package_name}].Image}'
-                    Name: frontend-${local.frontend_dns_branch_name}
+                    Name: frontend
                     ResourceRequirements: []
                     Environment:
                       - Name: PORT
@@ -413,7 +413,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: frontend-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
-                Family: !Ref TaskDefinitionName
+                Family: !Sub ${TaskDefinitionName}-${local.frontend_dns_branch_name}
                 Cpu: !Ref TaskDefinitionCPU
                 Memory: !Ref TaskDefinitionMemory
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
@@ -430,7 +430,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 ContainerDefinitions:
                   - Essential: !!bool true
                     Image: "#{Octopus.Action.Package[${local.frontend_proxy_package_name}].Image}"
-                    Name: proxy-${local.frontend_dns_branch_name}
+                    Name: proxy
                     ResourceRequirements: []
                     Environment:
                       - Name: DEFAULT_URL
@@ -450,7 +450,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
-                Family: !Sub $${TaskDefinitionName}-proxy
+                Family: !Sub $${TaskDefinitionName}-${local.frontend_dns_branch_name}-proxy
                 Cpu: 256
                 Memory: 512
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
