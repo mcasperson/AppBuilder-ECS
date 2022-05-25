@@ -2,7 +2,7 @@ resource "octopusdeploy_project" "deploy_frontend_featurebranch_project" {
   auto_create_release                  = false
   default_guided_failure_mode          = "EnvironmentDefault"
   default_to_skip_if_already_installed = false
-  description                          = "Deploys the frontend webapp to ECS."
+  description                          = "Deploys a frontend webapp feature branch to ECS."
   discrete_channel_release             = false
   is_disabled                          = false
   is_discrete_channel_release          = false
@@ -104,6 +104,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
           # frontend feature branch will work with.
           DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
           set_octopusvariable "MainLoadBalancer" "$${DNSNAME}"
+          echo "Found Load Balancer DNS Name: $${DNSNAME}"
         EOT
       }
     }
@@ -299,7 +300,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                       Values:
                         - /*
                 ListenerArn: !Ref Listener
-                Priority: 100
+                Priority: 200
               DependsOn:
                 - TargetGroup
             ProxyListenerRule:
@@ -319,7 +320,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         - /api/*
                         - /health/*
                 ListenerArn: !Ref Listener
-                Priority: 200
+                Priority: 100
               DependsOn:
                 - ProxyTargetGroup
             CloudWatchLogsGroup:
