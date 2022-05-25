@@ -60,9 +60,7 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
 
 
 locals {
-  frontend_package_name = "frontend"
   frontend_proxy_package_name = "proxy"
-  frontend_port         = "5000"
   frontend_dns_branch_name = "#{Octopus.Action[Deploy Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
 }
 
