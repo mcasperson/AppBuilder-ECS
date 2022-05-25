@@ -413,7 +413,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: frontend-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
-                Family: !Sub ${TaskDefinitionName}-${local.frontend_dns_branch_name}
+                Family: !Sub $${TaskDefinitionName}-${local.frontend_dns_branch_name}
                 Cpu: !Ref TaskDefinitionCPU
                 Memory: !Ref TaskDefinitionMemory
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
