@@ -170,7 +170,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
-                Name: "ECS-LB-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                Name: 'ECS-LB-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}'
                 Scheme: "internet-facing"
                 Type: "application"
                 Subnets:
