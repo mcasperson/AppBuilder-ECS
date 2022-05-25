@@ -183,30 +183,30 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: "Frontend Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupName: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
                     FromPort: 5000
                     IpProtocol: "tcp"
-                    ToPort: 80
+                    ToPort: 5000
             BackendProxySecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupName: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
                     FromPort: 8080
                     IpProtocol: "tcp"
-                    ToPort: 80
+                    ToPort: 8080
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
@@ -450,7 +450,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
-                Family: !Sub $${TaskDefinitionName}-Proxy
+                Family: !Sub $${TaskDefinitionName}-proxy
                 Cpu: 512
                 Memory: 128
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
