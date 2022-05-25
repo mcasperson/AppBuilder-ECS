@@ -395,7 +395,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                       - Name: PORT
                         Value: !!str "80"
                       - Name: DEFAULT_URL
-                        Value: !Sub 'http://${MainLoadBalancer}'
+                        Value: !Sub 'http://$${MainLoadBalancer}'
                     EnvironmentFiles: []
                     DisableNetworking: false
                     DnsServers: []
