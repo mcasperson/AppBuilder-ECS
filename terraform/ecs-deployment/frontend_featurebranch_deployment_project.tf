@@ -182,11 +182,11 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             FrontendSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "Frontend Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupDescription: "Frontend Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
+                GroupName: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -196,11 +196,11 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             BackendProxySecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
+                GroupName: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
