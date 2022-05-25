@@ -61,6 +61,7 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
 
 locals {
   frontend_package_name = "frontend"
+  frontend_proxy_package_name = "proxy"
   frontend_port         = "5000"
   frontend_dns_branch_name = "#{Octopus.Action[Deploy Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
 }
@@ -87,7 +88,12 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
         "Octopus.Action.AwsAccount.UseInstanceRole" : "False",
         "Octopus.Action.AwsAccount.Variable" : "AWS Account",
         "Octopus.Action.Aws.Region" : var.aws_region,
-        "Octopus.Action.Script.ScriptBody" : local.get_aws_resources
+        "Octopus.Action.Script.ScriptBody" : <<-EOT
+          ${local.get_aws_resources}
+
+          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
+          set_octopusvariable "MainLoadBalancer" "$${DNSNAME}"
+        EOT
       }
     }
   }
@@ -117,6 +123,13 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
           "Purpose" : "DockerImageReference"
         }
       }
+      package {
+        name                      = local.frontend_proxy_package_name
+        package_id                = "octopussamples/dumb-reverse-proxy"
+        feed_id                   = var.octopus_dockerhub_feed_id
+        acquisition_location      = "NotAcquired"
+        extract_during_deployment = false
+      }
 
       properties = {
         "Octopus.Action.Aws.AssumeRole" : "False"
@@ -125,6 +138,16 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
         "Octopus.Action.Aws.CloudFormationTemplate" : <<-EOT
           # A handy checklist for accessing private ECR repositories:
           # https://stackoverflow.com/a/69643388/157605
+
+          # ALBs don't have the ability to rewrite paths, which means feature branch instances are not easily deployed
+          # under their own subpath on a shared load balancer. The individual services being deployed could, in theory,
+          # be configured to respond to requests under a new subpath, but this functionality is not universal. For example,
+          # the Docker image created to host a static web app using the Heroku NGINX buildpack doesn't expose the ability
+          # to change the root directory based on an easily configurable external value like an environment variable.
+          #
+          # To demonstrate a more universal approach, each feature branch is exposed via its own load balancer. This means
+          # each feature branch uses the same path structure as the main instance. Where access to other services are required,
+          # a dumb reverse proxy forwards the request to the main load balancer.
           AWSTemplateFormatVersion: '2010-09-09'
           Resources:
             ALBSecurityGroup:
@@ -200,6 +223,27 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 TargetType: ip
                 UnhealthyThresholdCount: 5
                 VpcId: !Ref Vpc
+            ProxyTargetGroup:
+              Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+              Properties:
+                TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: '20'
+                HealthCheckEnabled: true
+                HealthCheckIntervalSeconds: 5
+                HealthCheckPath: /
+                HealthCheckPort: '${local.frontend_port}'
+                HealthCheckProtocol: HTTP
+                HealthCheckTimeoutSeconds: 2
+                HealthyThresholdCount: 2
+                Matcher:
+                  HttpCode: '200'
+                Name: OctopubFrontendProxyTargetGroup
+                Port: 8080
+                Protocol: HTTP
+                TargetType: ip
+                UnhealthyThresholdCount: 5
+                VpcId: !Ref Vpc
             ListenerRule:
               Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
               Properties:
@@ -219,6 +263,26 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 Priority: 100
               DependsOn:
                 - TargetGroup
+            ProxyListenerRule:
+              Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+              Properties:
+                Actions:
+                  - ForwardConfig:
+                      TargetGroups:
+                        - TargetGroupArn: !Ref ProxyTargetGroup
+                          Weight: 100
+                    Order: 1
+                    Type: forward
+                Conditions:
+                  - Field: path-pattern
+                    PathPatternConfig:
+                      Values:
+                        - /api/*
+                        - /health/*
+                ListenerArn: !Ref Listener
+                Priority: 100
+              DependsOn:
+                - ProxyTargetGroup
             CloudWatchLogsGroup:
               Type: AWS::Logs::LogGroup
               Properties:
@@ -252,6 +316,34 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                   MaximumPercent: 200
                   MinimumHealthyPercent: 100
               DependsOn: TaskDefinitionBackend
+            ServiceBackendProxy:
+              Type: AWS::ECS::Service
+              Properties:
+                ServiceName: OctopubFrontendProxy
+                Cluster:
+                  Ref: ClusterName
+                TaskDefinition:
+                  Ref: TaskDefinitionProxy
+                DesiredCount: 1
+                EnableECSManagedTags: false
+                Tags: []
+                LaunchType: FARGATE
+                NetworkConfiguration:
+                  AwsvpcConfiguration:
+                    AssignPublicIp: ENABLED
+                    SecurityGroups:
+                      - !Ref ALBSecurityGroup
+                    Subnets:
+                      - !Ref SubnetA
+                      - !Ref SubnetB
+                LoadBalancers:
+                  - ContainerName: proxy
+                    ContainerPort: 8080
+                    TargetGroupArn: !Ref ProxyTargetGroup
+                DeploymentConfiguration:
+                  MaximumPercent: 200
+                  MinimumHealthyPercent: 100
+              DependsOn: TaskDefinitionBackend
             TaskDefinitionBackend:
               Type: AWS::ECS::TaskDefinition
               Properties:
@@ -277,13 +369,56 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                       Options:
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
-                        awslogs-stream-prefix: frontend
+                        awslogs-stream-prefix: frontend-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
                 Family:
                   Ref: TaskDefinitionName
                 Cpu:
                   Ref: TaskDefinitionCPU
                 Memory:
                   Ref: TaskDefinitionMemory
+                ExecutionRoleArn:
+                  Ref: TaskExecutionRoleBackend
+                RequiresCompatibilities:
+                  - FARGATE
+                NetworkMode: awsvpc
+                Volumes: []
+                Tags: []
+                RuntimePlatform:
+                  OperatingSystemFamily: LINUX
+            TaskDefinitionProxy:
+              Type: AWS::ECS::TaskDefinition
+              Properties:
+                ContainerDefinitions:
+                  - Essential: true
+                    Image: '#{Octopus.Action.Package[${local.frontend_proxy_package_name}].Image}'
+                    Name: frontend
+                    ResourceRequirements: []
+                    Environment:
+                      - Name: PORT
+                        Value: !!str "80"
+                      - Name: DEFAULT_URL
+                        Value: !Sub 'http://${MainLoadBalancer}'
+                    EnvironmentFiles: []
+                    DisableNetworking: false
+                    DnsServers: []
+                    DnsSearchDomains: []
+                    ExtraHosts: []
+                    PortMappings:
+                      - ContainerPort: 80
+                        HostPort: 80
+                        Protocol: tcp
+                    LogConfiguration:
+                      LogDriver: awslogs
+                      Options:
+                        awslogs-group: !Ref CloudWatchLogsGroup
+                        awslogs-region: !Ref AWS::Region
+                        awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
+                Family:
+                  Sub: $${TaskDefinitionName}-Proxy
+                Cpu:
+                  Ref: 256
+                Memory:
+                  Ref: 128
                 ExecutionRoleArn:
                   Ref: TaskExecutionRoleBackend
                 RequiresCompatibilities:
@@ -341,6 +476,8 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Type: String
             Vpc:
               Type: String
+            MainLoadBalancer:
+              Type: String
           Outputs:
             ServiceName:
               Description: The service name
@@ -348,8 +485,8 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 - ServiceBackend
                 - Name
         EOT
-        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
-        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.MainLoadBalancer}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.MainLoadBalancer}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
         "Octopus.Action.Aws.IamCapabilities" : "[\"CAPABILITY_AUTO_EXPAND\",\"CAPABILITY_IAM\",\"CAPABILITY_NAMED_IAM\"]"
         "Octopus.Action.Aws.Region" : var.aws_region
         "Octopus.Action.Aws.TemplateSource" : "Inline"
