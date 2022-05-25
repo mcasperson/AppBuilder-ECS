@@ -92,12 +92,12 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
   }
   step {
     condition           = "Success"
-    name                = "Deploy ECS Service"
+    name                = "Deploy Frontend WebApp"
     package_requirement = "LetOctopusDecide"
     start_trigger       = "StartAfterPrevious"
     action {
       action_type    = "Octopus.AwsRunCloudFormation"
-      name           = "Deploy ECS Service"
+      name           = "Deploy Frontend WebApp"
       notes          = "Deploy the task definition, service, target group and listener rule via CloudFormation. The end result is a ECS service exposed by the load balancer created by the Create ECS Cluster project."
       run_on_server  = true
       worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
