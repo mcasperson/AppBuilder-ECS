@@ -4,4 +4,4 @@ terraform {
     key    = "appbuilder-ecs-deployment"
     region = "$TERRAFORM_BUCKET_REGION"
   }
-} 
+}
