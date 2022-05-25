@@ -62,8 +62,10 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
 locals {
   frontend_proxy_package_name = "proxy"
   frontend_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
+  frontend_trimmed_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower | Substring 5}"
   frontend_cf_stack_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
-  frontend_featurebranch_target_group_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+  # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
+  frontend_featurebranch_target_group_name = "ECS-FE-${substr(lower(var.github_repo_owner), 0, 5)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
@@ -91,6 +93,8 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
         "Octopus.Action.Script.ScriptBody" : <<-EOT
           ${local.get_aws_resources}
 
+          # Get the main load balancer, which exposes all the services, and will have the backend service that the
+          # frontend feature branch will work with.
           DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
           set_octopusvariable "MainLoadBalancer" "$${DNSNAME}"
         EOT
