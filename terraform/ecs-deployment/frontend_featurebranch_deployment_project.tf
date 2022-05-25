@@ -69,6 +69,8 @@ locals {
   frontend_cf_stack_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
   # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
   frontend_featurebranch_target_group_name = "ECS-FE-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
+  # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
+  frontend_featurebranch_loadbalancer_name = "ECS-LB-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
@@ -178,7 +180,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
-                Name: 'ECS-LB-${local.frontend_dns_branch_name}'
+                Name: '${local.frontend_featurebranch_loadbalancer_name}'
                 Scheme: "internet-facing"
                 Type: "application"
                 Subnets:
