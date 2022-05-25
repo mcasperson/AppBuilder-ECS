@@ -71,8 +71,8 @@ locals {
   frontend_featurebranch_target_group_name = "ECS-FE-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
   frontend_featurebranch_proxy_target_group_name = "ECS-FEP-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
   frontend_featurebranch_loadbalancer_name = "ECS-LB-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
-  frontend_featurebranch_service_name = "Prdt-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
-  frontend_featurebranch_proxy_service_name = "PrdtPxy-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
+  frontend_featurebranch_service_name = "Web-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
+  frontend_featurebranch_proxy_service_name = "WebPxy-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
