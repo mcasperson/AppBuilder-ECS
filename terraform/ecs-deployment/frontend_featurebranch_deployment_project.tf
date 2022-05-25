@@ -165,10 +165,10 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: "ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
-                GroupName: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                GroupName: "octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-alb-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                    Value: "octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -183,10 +183,10 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: "Frontend Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
-                GroupName: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                GroupName: "octopub-fe-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-fe-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                    Value: "octopub-fe-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -197,10 +197,10 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
-                GroupName: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                GroupName: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-prx-sg-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                    Value: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -393,7 +393,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 ContainerDefinitions:
                   - Essential: true
                     Image: '#{Octopus.Action.Package[${local.frontend_package_name}].Image}'
-                    Name: frontend
+                    Name: frontend-${local.frontend_dns_branch_name}
                     ResourceRequirements: []
                     Environment:
                       - Name: PORT
@@ -430,7 +430,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 ContainerDefinitions:
                   - Essential: !!bool true
                     Image: "#{Octopus.Action.Package[${local.frontend_proxy_package_name}].Image}"
-                    Name: proxy
+                    Name: proxy-${local.frontend_dns_branch_name}
                     ResourceRequirements: []
                     Environment:
                       - Name: DEFAULT_URL
@@ -452,7 +452,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
                 Family: !Sub $${TaskDefinitionName}-proxy
                 Cpu: 512
-                Memory: 128
+                Memory: 256
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
                 RequiresCompatibilities:
                   - FARGATE
