@@ -61,7 +61,8 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
 
 locals {
   frontend_proxy_package_name = "proxy"
-  frontend_dns_branch_name = "#{Octopus.Action[Deploy Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
+  frontend_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
+  frontend_cf_stack_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
@@ -132,7 +133,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
       properties = {
         "Octopus.Action.Aws.AssumeRole" : "False"
         "Octopus.Action.Aws.CloudFormation.Tags" : "[]"
-        "Octopus.Action.Aws.CloudFormationStackName" : "AppBuilder-ECS-Frontend-Task-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+        "Octopus.Action.Aws.CloudFormationStackName" : local.frontend_cf_stack_name
         "Octopus.Action.Aws.CloudFormationTemplate" : <<-EOT
           # A handy checklist for accessing private ECR repositories:
           # https://stackoverflow.com/a/69643388/157605
@@ -536,7 +537,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
           ENVIRONMENT_ARRAY=($ENVIRONMENT)
           FIXED_ENVIRONMENT=$${ENVIRONMENT_ARRAY[0]}
 
-          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}-${local.frontend_dns_branch_name}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
+          DNSNAME=$(aws cloudformation describe-stacks --stack-name "${local.frontend_cf_stack_name}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
 
           set_octopusvariable "DNSName" "$${DNSNAME}"
 
