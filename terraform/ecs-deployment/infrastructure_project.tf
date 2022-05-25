@@ -252,7 +252,7 @@ resource "octopusdeploy_deployment_process" "deploy_cluster" {
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
-                Name: "ECS-LB-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                Name: "ECS-LB-Shared"
                 Scheme: "internet-facing"
                 Type: "application"
                 Subnets:

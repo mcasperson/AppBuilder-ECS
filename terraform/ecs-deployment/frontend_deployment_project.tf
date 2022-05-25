@@ -62,6 +62,7 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable" {
 locals {
   frontend_package_name = "frontend"
   frontend_port         = "5000"
+  frontend_target_group_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend" {
@@ -141,7 +142,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: OctopubFrontendTargetGroup
+                Name: ${local.frontend_target_group_name}
                 Port: ${local.frontend_port}
                 Protocol: HTTP
                 TargetType: ip

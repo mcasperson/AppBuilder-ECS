@@ -8,7 +8,7 @@ resource "octopusdeploy_project" "deploy_frontend_featurebranch_project" {
   is_discrete_channel_release          = false
   is_version_controlled                = false
   lifecycle_id                         = var.octopus_application_lifecycle_id
-  name                                 = "Deploy Frontend Feature Branch WebApp"
+  name                                 = "Frontend Feature Branch WebApp"
   project_group_id                     = octopusdeploy_project_group.frontend_project_group.id
   tenanted_deployment_participation    = "Untenanted"
   space_id                             = var.octopus_space_id
@@ -63,6 +63,7 @@ locals {
   frontend_proxy_package_name = "proxy"
   frontend_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
   frontend_cf_stack_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+  frontend_featurebranch_target_group_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
@@ -170,7 +171,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
-                Name: 'ECS-LB-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}'
+                Name: 'ECS-LoadBalancer-${local.frontend_dns_branch_name}'
                 Scheme: "internet-facing"
                 Type: "application"
                 Subnets:
@@ -216,7 +217,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: OctopubFrontendTargetGroup
+                Name: ${local.frontend_featurebranch_target_group_name}
                 Port: ${local.frontend_port}
                 Protocol: HTTP
                 TargetType: ip
@@ -342,7 +343,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 DeploymentConfiguration:
                   MaximumPercent: 200
                   MinimumHealthyPercent: 100
-              DependsOn: TaskDefinitionBackend
+              DependsOn: TaskDefinitionProxy
             TaskDefinitionBackend:
               Type: AWS::ECS::TaskDefinition
               Properties:
@@ -414,10 +415,8 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                         awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
                 Family:
                   Sub: $${TaskDefinitionName}-Proxy
-                Cpu:
-                  Ref: 256
-                Memory:
-                  Ref: 128
+                Cpu: 256
+                Memory: 128
                 ExecutionRoleArn:
                   Ref: TaskExecutionRoleBackend
                 RequiresCompatibilities:
