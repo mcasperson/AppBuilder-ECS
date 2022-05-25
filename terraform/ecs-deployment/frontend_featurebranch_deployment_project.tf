@@ -29,7 +29,7 @@ resource "octopusdeploy_variable" "frontend_featurebranch_debug_variable" {
   type         = "String"
   description  = "A debug variable used to print all variables to the logs. See [here](https://octopus.com/docs/support/debug-problems-with-octopus-variables) for more information."
   is_sensitive = false
-  owner_id     = octopusdeploy_project.deploy_frontend_project.id
+  owner_id     = octopusdeploy_project.deploy_frontend_featurebranch_project.id
   value        = "False"
 }
 
@@ -38,7 +38,7 @@ resource "octopusdeploy_variable" "frontend_featurebranch_debug_evaluated_variab
   type         = "String"
   description  = "A debug variable used to print all variables to the logs. See [here](https://octopus.com/docs/support/debug-problems-with-octopus-variables) for more information."
   is_sensitive = false
-  owner_id     = octopusdeploy_project.deploy_frontend_project.id
+  owner_id     = octopusdeploy_project.deploy_frontend_featurebranch_project.id
   value        = "False"
 }
 
@@ -46,7 +46,7 @@ resource "octopusdeploy_variable" "aws_account_deploy_frontend_featurebranch_pro
   name     = "AWS Account"
   type     = "AmazonWebServicesAccount"
   value    = var.octopus_aws_account_id
-  owner_id = octopusdeploy_project.deploy_frontend_project.id
+  owner_id = octopusdeploy_project.deploy_frontend_featurebranch_project.id
 }
 
 resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
@@ -54,7 +54,7 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
   type         = "String"
   description  = "A structured variable replacement for the Cypress test."
   is_sensitive = false
-  owner_id     = octopusdeploy_project.deploy_frontend_project.id
+  owner_id     = octopusdeploy_project.deploy_frontend_featurebranch_project.id
   value        = "http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}"
 }
 
@@ -103,7 +103,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
     action {
       action_type    = "Octopus.AwsRunCloudFormation"
       name           = "Deploy Frontend WebApp"
-      notes          = "Deploy the task definition, service, target group and listener rule via CloudFormation. The end result is a ECS service exposed by the load balancer created by the Create ECS Cluster project."
+      notes          = "Deploy the task definition, service, target group, listener rule, and load balancer via CloudFormation. The end result is a ECS service exposed by its own unique load balancer."
       run_on_server  = true
       worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
       environments   = [
@@ -568,7 +568,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
       script_body = <<-EOT
           # Load balancers can take a minute or so before their DNS is propagated.
           # A status code of 000 means curl could not resolve the DNS name, so we wait for a bit until DNS is updated.
-          echo "Waiting for DNS to propogate. This can take a while for a new load balancer."
+          echo "Waiting for DNS to propagate. This can take a while for a new load balancer."
           for i in {1..60}
           do
               CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/index.html)
