@@ -62,15 +62,17 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
 locals {
   frontend_proxy_package_name = "proxy"
   # This is the package semver prerelease label up until the first period, so a version of "1.0.0-MYBranch.1" becomes "mybranch"
-  frontend_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
+  frontend_dns_branch_name = "#{Octopus.Action[Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
   # This is the first 10 characters of the prerelease, used in names that have limited characters
-  frontend_trimmed_dns_branch_name = "#{Octopus.Action[Deploy Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower | Substring 10}"
+  frontend_trimmed_dns_branch_name = "#{Octopus.Action[Frontend WebApp].Package[${local.frontend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower | Substring 10}"
   # The stack names can be 128 chars long
   frontend_cf_stack_name = "ECS-FE-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
   # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
   frontend_featurebranch_target_group_name = "ECS-FE-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
-  # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
+  frontend_featurebranch_proxy_target_group_name = "ECS-FEP-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
   frontend_featurebranch_loadbalancer_name = "ECS-LB-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
+  frontend_featurebranch_service_name = "Prdt-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
+  frontend_featurebranch_proxy_service_name = "PrdtPxy-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.frontend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
@@ -108,12 +110,12 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
   }
   step {
     condition           = "Success"
-    name                = "Deploy Frontend WebApp"
+    name                = "Frontend WebApp"
     package_requirement = "LetOctopusDecide"
     start_trigger       = "StartAfterPrevious"
     action {
       action_type    = "Octopus.AwsRunCloudFormation"
-      name           = "Deploy Frontend WebApp"
+      name           = "Frontend WebApp"
       notes          = "Deploy the task definition, service, target group, listener rule, and load balancer via CloudFormation. The end result is a ECS service exposed by its own unique load balancer."
       run_on_server  = true
       worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
@@ -247,7 +249,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: OctopubFrontendProxyTargetGroup
+                Name: ${local.frontend_featurebranch_proxy_target_group_name}
                 Port: 8080
                 Protocol: HTTP
                 TargetType: ip
@@ -300,7 +302,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ServiceBackend:
               Type: AWS::ECS::Service
               Properties:
-                ServiceName: OctopubFrontend
+                ServiceName: ${local.frontend_featurebranch_service_name}
                 Cluster:
                   Ref: ClusterName
                 TaskDefinition:
@@ -328,7 +330,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
             ServiceBackendProxy:
               Type: AWS::ECS::Service
               Properties:
-                ServiceName: OctopubFrontendProxy
+                ServiceName: ${local.frontend_featurebranch_proxy_service_name}
                 Cluster:
                   Ref: ClusterName
                 TaskDefinition:

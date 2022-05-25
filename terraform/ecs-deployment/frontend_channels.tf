@@ -7,7 +7,7 @@ resource "octopusdeploy_channel" "frontend_feature_branch" {
   rule {
     tag = ".+"
     action_package {
-      deployment_action = "Deploy Frontend WebApp"
+      deployment_action = "Frontend WebApp"
       package_reference = local.frontend_package_name
     }
     action_package {
@@ -26,7 +26,7 @@ resource "octopusdeploy_channel" "frontend_mainline" {
   rule {
     tag = "^$"
     action_package {
-      deployment_action = "Deploy Frontend WebApp"
+      deployment_action = "Frontend WebApp"
       package_reference = local.frontend_package_name
     }
     action_package {
