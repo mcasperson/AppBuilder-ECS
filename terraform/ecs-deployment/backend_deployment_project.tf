@@ -328,7 +328,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                     PathPatternConfig:
                       Values:
                         - /api/products
-                        - /api/products/
+                        - /api/products/*
                         - /health/products/*
                 ListenerArn: !Ref MainListener
                 Priority: 100
