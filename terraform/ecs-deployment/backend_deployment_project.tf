@@ -339,7 +339,9 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                         - /api/products/*
                         - /health/products/*
                 ListenerArn: !Ref MainListener
-                Priority: 100
+                # This has to be unique for each rule. The frontend uses a priority of 1000. Backend services
+                # all need unique priorities under 1000.
+                Priority: 200
             CloudWatchLogsGroup:
               Type: AWS::Logs::LogGroup
               Properties:
