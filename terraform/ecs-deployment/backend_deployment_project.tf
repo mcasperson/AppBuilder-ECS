@@ -142,6 +142,13 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
           "Purpose" : "DockerImageReference"
         }
       }
+      package {
+        name                      = local.backend_proxy_package_name
+        package_id                = "octopussamples/dumb-reverse-proxy"
+        feed_id                   = var.octopus_dockerhub_feed_id
+        acquisition_location      = "NotAcquired"
+        extract_during_deployment = false
+      }
 
       properties = {
         "Octopus.Action.Aws.AssumeRole" : "False"
