@@ -147,10 +147,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
               Type: "AWS::EC2::SecurityGroup"
               Properties:
                 GroupDescription: 'ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.backend_dns_branch_name}'
-                GroupName: 'octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
+                GroupName: 'octopub-prd-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 Tags:
                   - Key: "Name"
-                    Value: 'octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
+                    Value: 'octopub-prd-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
