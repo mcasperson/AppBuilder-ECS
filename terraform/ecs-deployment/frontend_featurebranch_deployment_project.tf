@@ -55,7 +55,7 @@ resource "octopusdeploy_variable" "cypress_baseurl_variable_featurebranch" {
   description  = "A structured variable replacement for the Cypress test."
   is_sensitive = false
   owner_id     = octopusdeploy_project.deploy_frontend_featurebranch_project.id
-  value        = "http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}"
+  value        = "http://#{Octopus.Action[Frontend WebApp].Output.AwsOutputs[DNSName]}"
 }
 
 
@@ -97,15 +97,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
         "Octopus.Action.AwsAccount.UseInstanceRole" : "False",
         "Octopus.Action.AwsAccount.Variable" : "AWS Account",
         "Octopus.Action.Aws.Region" : var.aws_region,
-        "Octopus.Action.Script.ScriptBody" : <<-EOT
-          ${local.get_aws_resources}
-
-          # Get the main load balancer, which exposes all the services, and will have the backend service that the
-          # frontend feature branch will work with.
-          DNSNAME=$(aws cloudformation describe-stacks --stack-name "AppBuilder-ECS-LB-${lower(var.github_repo_owner)}-$${FIXED_ENVIRONMENT}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
-          set_octopusvariable "MainLoadBalancer" "$${DNSNAME}"
-          echo "Found Load Balancer DNS Name: $${DNSNAME}"
-        EOT
+        "Octopus.Action.Script.ScriptBody" : local.get_aws_resources
       }
     }
   }
@@ -337,7 +329,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               Properties:
                 ServiceName: ${local.frontend_featurebranch_service_name}
                 Cluster: !Ref ClusterName
-                TaskDefinition: !Ref TaskDefinitionBackend
+                TaskDefinition: !Ref TaskDefinitionFrontend
                 DesiredCount: 1
                 EnableECSManagedTags: false
                 Tags: []
@@ -358,7 +350,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                   MaximumPercent: 200
                   MinimumHealthyPercent: 100
               DependsOn:
-                - TaskDefinitionBackend
+                - TaskDefinitionFrontend
                 - Listener
                 - ListenerRule
                 - TargetGroup
@@ -392,7 +384,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
                 - Listener
                 - ProxyListenerRule
                 - ProxyTargetGroup
-            TaskDefinitionBackend:
+            TaskDefinitionFrontend:
               Type: AWS::ECS::TaskDefinition
               Properties:
                 ContainerDefinitions:
@@ -533,8 +525,8 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
               - ApplicationLoadBalancer
               - DNSName
         EOT
-        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.MainLoadBalancer}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"}]"
-        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.MainLoadBalancer}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.DNSName}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"MainLoadBalancer\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.DNSName}\"},{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"frontend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"}]"
         "Octopus.Action.Aws.IamCapabilities" : "[\"CAPABILITY_AUTO_EXPAND\",\"CAPABILITY_IAM\",\"CAPABILITY_NAMED_IAM\"]"
         "Octopus.Action.Aws.Region" : var.aws_region
         "Octopus.Action.Aws.TemplateSource" : "Inline"
@@ -569,28 +561,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
         "Octopus.Action.AwsAccount.Variable" : "AWS Account",
         "Octopus.Action.Aws.Region" : var.aws_region,
         "Octopus.Action.Script.ScriptBody" : <<-EOT
-          # Get the containers
-          echo "Downloading Docker images"
-          echo "##octopus[stdout-verbose]"
-          docker pull amazon/aws-cli 2>&1
-          docker pull imega/jq 2>&1
-          echo "##octopus[stdout-default]"
-
-          # Alias the docker run commands
-          shopt -s expand_aliases
-          alias aws="docker run --rm -i -v $(pwd):/build -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY amazon/aws-cli"
-          alias jq="docker run --rm -i imega/jq"
-
-          # Get the environmen name (or at least up until the first space)
-          ENVIRONMENT="#{Octopus.Environment.Name | ToLower}"
-          ENVIRONMENT_ARRAY=($ENVIRONMENT)
-          FIXED_ENVIRONMENT=$${ENVIRONMENT_ARRAY[0]}
-
-          DNSNAME=$(aws cloudformation describe-stacks --stack-name "${local.frontend_cf_stack_name}" --query "Stacks[0].Outputs[?OutputKey=='DNSName'].OutputValue" --output text)
-
-          set_octopusvariable "DNSName" "$${DNSNAME}"
-
-          write_highlight "Open [http://$${DNSNAME}/index.html](http://$${DNSNAME}/index.html) to view the frontend webapp."
+          write_highlight "Open [http://#{Octopus.Action[Frontend WebApp].Output.AwsOutputs[DNSName]}/index.html](http://#{Octopus.Action[Frontend WebApp].Output.AwsOutputs[DNSName]}/index.html) to view the frontend webapp."
         EOT
       }
     }
@@ -621,7 +592,7 @@ resource "octopusdeploy_deployment_process" "deploy_frontend_featurebranch" {
           echo "Waiting for DNS to propagate. This can take a while for a new load balancer."
           for i in {1..60}
           do
-              CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Find the LoadBalancer URL].Output.DNSName}/index.html)
+              CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Frontend WebApp].Output.AwsOutputs[DNSName]}/index.html)
               if [[ "$${CODE}" != "000" ]]
               then
                 break
