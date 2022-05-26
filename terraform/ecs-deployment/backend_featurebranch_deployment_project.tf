@@ -78,7 +78,8 @@ resource "octopusdeploy_variable" "postman_raw_port_featurebranch_variable" {
 
 locals {
   backend_dns_branch_name = "#{Octopus.Action[Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower}"
-  backend_featurebranch_loadbalancer_name = "ECS-PRD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.backend_dns_branch_name}"
+  backend_trimmed_dns_branch_name = "#{Octopus.Action[Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower | Substring 10}"
+  backend_featurebranch_loadbalancer_name = "ECS-PRD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.backend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
