@@ -189,11 +189,11 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
             BackendProxySecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "Products Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
-                GroupName: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
+                GroupName: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 Tags:
                   - Key: "Name"
-                    Value: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                    Value: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -328,7 +328,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                     PathPatternConfig:
                       Values:
                         - /api/products
-                        - /api/products/*
+                        - /api/products/
                         - /health/products/*
                 ListenerArn: !Ref MainListener
                 Priority: 100
