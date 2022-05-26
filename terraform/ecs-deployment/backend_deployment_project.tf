@@ -87,6 +87,7 @@ locals {
   backend_targetgroup_name = "ECS-PD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
   backend_proxy_service_name = "PrdPxy-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
   backend_proxy_package_name = "proxy"
+  backend_proxy_target_group_name = "ECS-PRD-PX-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend" {
@@ -189,11 +190,11 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
             BackendProxySecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "Backend Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.frontend_dns_branch_name}"
-                GroupName: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                GroupDescription: "Products Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupName: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.frontend_dns_branch_name}"
+                    Value: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -281,7 +282,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: ${local.frontend_featurebranch_proxy_target_group_name}
+                Name: ${local.backend_proxy_target_group_name}
                 Port: 8080
                 Protocol: HTTP
                 TargetType: ip
@@ -328,7 +329,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                     PathPatternConfig:
                       Values:
                         - /api/products
-                        - /api/products/
+                        - /api/products/*
                         - /health/products/*
                 ListenerArn: !Ref MainListener
                 Priority: 100
@@ -465,7 +466,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                       Options:
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
-                        awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
+                        awslogs-stream-prefix: products-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
                 Family: !Sub $${TaskDefinitionName}-proxy
                 Cpu: 256
                 Memory: 512
