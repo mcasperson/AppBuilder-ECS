@@ -146,11 +146,11 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
             ALBSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.backend_dns_branch_name}"
-                GroupName: "octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}"
+                GroupDescription: 'ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.backend_dns_branch_name}'
+                GroupName: 'octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}"
+                    Value: 'octopub-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -310,7 +310,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: backend
-                Family: !Ref 'TaskDefinitionName-${local.backend_dns_branch_name}'
+                Family: !Sub '${TaskDefinitionName}-${local.backend_dns_branch_name}'
                 Cpu: !Ref TaskDefinitionCPU
                 Memory: !Ref TaskDefinitionMemory
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
