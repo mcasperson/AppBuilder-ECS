@@ -185,6 +185,25 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                     FromPort: ${local.backend_port}
                     IpProtocol: "tcp"
                     ToPort: ${local.backend_port}
+            # The dumb reverse proxies need to open ports 8080 and 8081.
+            BackendProxySecurityGroup:
+              Type: "AWS::EC2::SecurityGroup"
+              Properties:
+                GroupDescription: "Products Proxy Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                GroupName: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                Tags:
+                  - Key: "Name"
+                    Value: "products-prx-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}"
+                VpcId: !Ref Vpc
+                SecurityGroupIngress:
+                  - CidrIp: "0.0.0.0/0"
+                    FromPort: 8080
+                    IpProtocol: "tcp"
+                    ToPort: 8080
+                  - CidrIp: "0.0.0.0/0"
+                    FromPort: 8081
+                    IpProtocol: "tcp"
+                    ToPort: 8081
             # The main service is exposed by its own load balancer.
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
