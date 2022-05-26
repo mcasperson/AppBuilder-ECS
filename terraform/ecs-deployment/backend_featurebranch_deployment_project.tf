@@ -115,7 +115,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
     action {
       action_type    = "Octopus.AwsRunCloudFormation"
       name           = "Backend Service"
-      notes          = "Deploy the task definition, service, target group and listener rule via CloudFormation. The end result is a ECS service exposed by the load balancer created by the ECS Cluster project."
+      notes          = "Deploy the task definition, service, target group, listener, and load balancer rule via CloudFormation. The end result is a ECS service exposed by it's own unique load balancer."
       run_on_server  = true
       worker_pool_id = data.octopusdeploy_worker_pools.ubuntu_worker_pool.worker_pools[0].id
       environments   = [
@@ -164,11 +164,11 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
             BackendSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
-                GroupDescription: "Product Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.backend_dns_branch_name}"
-                GroupName: "octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}"
+                GroupDescription: 'Product Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment} ${local.backend_dns_branch_name}'
+                GroupName: 'octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 Tags:
                   - Key: "Name"
-                    Value: "octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}"
+                    Value: 'octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 VpcId: !Ref Vpc
                 SecurityGroupIngress:
                   - CidrIp: "0.0.0.0/0"
@@ -310,7 +310,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: backend
-                Family: !Ref TaskDefinitionName-${local.backend_dns_branch_name}
+                Family: !Ref 'TaskDefinitionName-${local.backend_dns_branch_name}'
                 Cpu: !Ref TaskDefinitionCPU
                 Memory: !Ref TaskDefinitionMemory
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
@@ -353,7 +353,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
           Parameters:
             ClusterName:
               Type: String
-              Default: app-builder-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
+              Default: 'app-builder-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
             TaskDefinitionName:
               Type: String
               Default: backend
