@@ -81,6 +81,7 @@ locals {
   backend_trimmed_dns_branch_name = "#{Octopus.Action[Backend Service].Package[${local.backend_package_name}].PackageVersion | VersionPreRelease | Replace \"\\..*\" \"\" | ToLower | Substring 10}"
   # This needs to be under 32 characters, and yet still unique per user / environment / branch. We trim a few strings to try and keep it under the limit.
   backend_featurebranch_loadbalancer_name = "ECS-PD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.backend_trimmed_dns_branch_name}"
+  backend_featurebranch_targetgroup_name = "ECS-PD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}-${local.backend_trimmed_dns_branch_name}"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
@@ -145,6 +146,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
           # https://stackoverflow.com/a/69643388/157605
           AWSTemplateFormatVersion: '2010-09-09'
           Resources:
+            # The load balancer security group allows HTTP and HTTPS traffic.
             ALBSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
@@ -163,6 +165,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                     FromPort: 443
                     IpProtocol: "tcp"
                     ToPort: 443
+            # The ECS service exposes the container port.
             BackendSecurityGroup:
               Type: "AWS::EC2::SecurityGroup"
               Properties:
@@ -177,6 +180,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                     FromPort: ${local.backend_port}
                     IpProtocol: "tcp"
                     ToPort: ${local.backend_port}
+            # Each feature branch is exposed on its own load balancer.
             ApplicationLoadBalancer:
               Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
               Properties:
@@ -200,6 +204,8 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                     Value: "true"
                   - Key: "routing.http.drop_invalid_header_fields.enabled"
                     Value: "false"
+            # The listener defines the traffic accecpted by the load balancer, which in this case is HTTP traffic.
+            # It also has a default rule to return 404 if no other listener rules match.
             Listener:
               Type: 'AWS::ElasticLoadBalancingV2::Listener'
               Properties:
@@ -211,6 +217,8 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                 LoadBalancerArn: !Ref ApplicationLoadBalancer
                 Port: 80
                 Protocol: HTTP
+            # Target groups reference the ECS services. The services always have a random IP address, so a target group
+            # provides a way to expose the IP addresses and load balance between multiple services.
             TargetGroup:
               Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
               Properties:
@@ -226,12 +234,14 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: OctopubProductsTargetGroup
+                Name: '${local.backend_featurebranch_targetgroup_name}'
                 Port: ${local.backend_port}
                 Protocol: HTTP
                 TargetType: ip
                 UnhealthyThresholdCount: 5
                 VpcId: !Ref Vpc
+            # The listener rule defines how traffic is forwarded from the listener to the target group, and in trun
+            # to the ECS services.
             ListenerRule:
               Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
               Properties:
@@ -253,15 +263,20 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                 Priority: 50
               DependsOn:
                 - TargetGroup
+            # This the the log group for the ECS service.
             CloudWatchLogsGroup:
               Type: AWS::Logs::LogGroup
               Properties:
                 LogGroupName: !Ref AWS::StackName
                 RetentionInDays: 14
+            # This is the ECS service, which registers itself with the target group defined above.
+            # Note that we need to depend on the listener rule and listener, which ensures the service is only
+            # created once it can be assigned to a load balancer. Without these dependencies, CloudFormation may fail to
+            # deploy the template, as ECS requires services have an active load balancer.
             ServiceBackend:
               Type: AWS::ECS::Service
               Properties:
-                ServiceName: OctopubProducts
+                ServiceName: 'OctopubProducts-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}-${local.backend_dns_branch_name}'
                 Cluster:
                   Ref: ClusterName
                 TaskDefinition:
@@ -285,7 +300,11 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                 DeploymentConfiguration:
                   MaximumPercent: 200
                   MinimumHealthyPercent: 100
-              DependsOn: TaskDefinitionBackend
+              DependsOn:
+                - TaskDefinitionBackend
+                - ListenerRule
+                - Listener
+            # The task definition defines the images used to build the containers managed by the ECS service.
             TaskDefinitionBackend:
               Type: AWS::ECS::TaskDefinition
               Properties:
@@ -323,6 +342,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                 Tags: []
                 RuntimePlatform:
                   OperatingSystemFamily: LINUX
+            # This role allows the ECS service to download images from ECR and create log entries.
             TaskExecutionRoleBackend:
               Type: AWS::IAM::Role
               Properties:
@@ -448,10 +468,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
           # Load balancers can take a minute or so before their DNS is propagated.
           # A status code of 000 means curl could not resolve the DNS name, so we wait for a bit until DNS is updated.
           echo "Waiting for DNS to propagate. This can take a while for a new load balancer."
-          for i in {1..60}
+          for i in {1..30}
           do
               CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Backend Service].Output.AwsOutputs[DNSName]}/health/products/GET)
-              if [[ "$${CODE}" != "000" ]]
+              if [[ "$${CODE}" != "000" && "$${CODE}" != "502" ]]
               then
                 break
               fi

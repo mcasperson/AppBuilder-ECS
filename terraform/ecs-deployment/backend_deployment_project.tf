@@ -83,6 +83,10 @@ resource "octopusdeploy_variable" "postman_raw_port_variable" {
 locals {
   backend_package_name = "backend"
   backend_port         = "8083"
+  backend_loadbalancer_name = "ECS-PD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
+  backend_targetgroup_name = "ECS-PD-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
+  backend_proxy_service_name = "PrdPxy-${substr(lower(var.github_repo_owner), 0, 10)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment | Substring 3}"
+  backend_proxy_package_name = "proxy"
 }
 
 resource "octopusdeploy_deployment_process" "deploy_backend" {
@@ -147,6 +151,79 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
           # https://stackoverflow.com/a/69643388/157605
           AWSTemplateFormatVersion: '2010-09-09'
           Resources:
+            # The load balancer security group allows HTTP and HTTPS traffic.
+            ALBSecurityGroup:
+              Type: "AWS::EC2::SecurityGroup"
+              Properties:
+                GroupDescription: 'ALB Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                GroupName: 'octopub-prd-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                Tags:
+                  - Key: "Name"
+                    Value: 'octopub-prd-alb-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                VpcId: !Ref Vpc
+                SecurityGroupIngress:
+                  - CidrIp: "0.0.0.0/0"
+                    FromPort: 80
+                    IpProtocol: "tcp"
+                    ToPort: 80
+                  - CidrIp: "0.0.0.0/0"
+                    FromPort: 443
+                    IpProtocol: "tcp"
+                    ToPort: 443
+            # The ECS service exposes the container port.
+            BackendSecurityGroup:
+              Type: "AWS::EC2::SecurityGroup"
+              Properties:
+                GroupDescription: 'Product Security group #{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                GroupName: 'octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                Tags:
+                  - Key: "Name"
+                    Value: 'octopub-prd-sg-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
+                VpcId: !Ref Vpc
+                SecurityGroupIngress:
+                  - CidrIp: "0.0.0.0/0"
+                    FromPort: ${local.backend_port}
+                    IpProtocol: "tcp"
+                    ToPort: ${local.backend_port}
+            # The main service is exposed by its own load balancer.
+            ApplicationLoadBalancer:
+              Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+              Properties:
+                Name: '${local.backend_loadbalancer_name}'
+                Scheme: "internet-facing"
+                Type: "application"
+                Subnets:
+                  - !Ref SubnetA
+                  - !Ref SubnetB
+                SecurityGroups:
+                  - !Ref ALBSecurityGroup
+                IpAddressType: "ipv4"
+                LoadBalancerAttributes:
+                  - Key: "access_logs.s3.enabled"
+                    Value: "false"
+                  - Key: "idle_timeout.timeout_seconds"
+                    Value: "60"
+                  - Key: "deletion_protection.enabled"
+                    Value: "false"
+                  - Key: "routing.http2.enabled"
+                    Value: "true"
+                  - Key: "routing.http.drop_invalid_header_fields.enabled"
+                    Value: "false"
+            # The listener defines the traffic accecpted by the load balancer, which in this case is HTTP traffic.
+            # It also has a default rule to return 404 if no other listener rules match.
+            Listener:
+              Type: 'AWS::ElasticLoadBalancingV2::Listener'
+              Properties:
+                DefaultActions:
+                  - FixedResponseConfig:
+                      StatusCode: '404'
+                    Order: 1
+                    Type: fixed-response
+                LoadBalancerArn: !Ref ApplicationLoadBalancer
+                Port: 80
+                Protocol: HTTP
+            # Target groups reference the ECS services. The services always have a random IP address, so a target group
+            # provides a way to expose the IP addresses and load balance between multiple services.
             TargetGroup:
               Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
               Properties:
@@ -162,12 +239,38 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                 HealthyThresholdCount: 2
                 Matcher:
                   HttpCode: '200'
-                Name: OctopubProductsTargetGroup
+                Name: '${local.backend_targetgroup_name}'
                 Port: ${local.backend_port}
                 Protocol: HTTP
                 TargetType: ip
                 UnhealthyThresholdCount: 5
                 VpcId: !Ref Vpc
+            # The main service also creates a dumb reverse proxy. The ECS services hosting the DRP are referenced in
+            # this target group.
+            ProxyTargetGroup:
+              Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+              Properties:
+                TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: '20'
+                HealthCheckEnabled: true
+                HealthCheckIntervalSeconds: 5
+                HealthCheckPath: /
+                HealthCheckPort: 8081
+                HealthCheckProtocol: HTTP
+                HealthCheckTimeoutSeconds: 2
+                HealthyThresholdCount: 2
+                Matcher:
+                  HttpCode: '200'
+                Name: ${local.frontend_featurebranch_proxy_target_group_name}
+                Port: 8080
+                Protocol: HTTP
+                TargetType: ip
+                UnhealthyThresholdCount: 5
+                VpcId: !Ref Vpc
+            # The listener rule defines how traffic is forwarded from the listener to the target group, and in trun
+            # to the ECS services.
+            # Note this listener is atatched to the load balancer created by this template.
             ListenerRule:
               Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
               Properties:
@@ -189,6 +292,27 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                 Priority: 50
               DependsOn:
                 - TargetGroup
+            # The dumb reverse proxy routes all traffic to the /api/products and /health/products endpoints.
+            # Note this listener is attached to the top level shared load balancer.
+            ProxyListenerRule:
+              Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+              Properties:
+                Actions:
+                  - ForwardConfig:
+                      TargetGroups:
+                        - TargetGroupArn: !Ref ProxyTargetGroup
+                          Weight: 100
+                    Order: 1
+                    Type: forward
+                Conditions:
+                  - Field: path-pattern
+                    PathPatternConfig:
+                      Values:
+                        - /api/products
+                        - /api/products/
+                        - /health/products/*
+                ListenerArn: !Ref MainListener
+                Priority: 100
             CloudWatchLogsGroup:
               Type: AWS::Logs::LogGroup
               Properties:
@@ -197,7 +321,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
             ServiceBackend:
               Type: AWS::ECS::Service
               Properties:
-                ServiceName: OctopubProducts
+                ServiceName: 'OctopubProducts-${lower(var.github_repo_owner)}-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}'
                 Cluster:
                   Ref: ClusterName
                 TaskDefinition:
@@ -221,7 +345,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                 DeploymentConfiguration:
                   MaximumPercent: 200
                   MinimumHealthyPercent: 100
-              DependsOn: TaskDefinitionBackend
+              DependsOn:
+                - TaskDefinitionBackend
+                - Listener
+                - ListenerRule
             TaskDefinitionBackend:
               Type: AWS::ECS::TaskDefinition
               Properties:
@@ -256,6 +383,74 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                   Ref: TaskDefinitionMemory
                 ExecutionRoleArn:
                   Ref: TaskExecutionRoleBackend
+                RequiresCompatibilities:
+                  - FARGATE
+                NetworkMode: awsvpc
+                Volumes: []
+                Tags: []
+                RuntimePlatform:
+                  OperatingSystemFamily: LINUX
+            # The dumb reverse proxy is set to forward traffic to this main service by default. Clients
+            # of this service can define the "Routing" header to have the DRP route traffic to feature branch instances.
+            ServiceBackendProxy:
+              Type: AWS::ECS::Service
+              Properties:
+                ServiceName: ${local.backend_proxy_service_name}
+                Cluster: !Ref ClusterName
+                TaskDefinition: !Ref TaskDefinitionProxy
+                DesiredCount: 1
+                EnableECSManagedTags: false
+                Tags: []
+                LaunchType: FARGATE
+                NetworkConfiguration:
+                  AwsvpcConfiguration:
+                    AssignPublicIp: ENABLED
+                    SecurityGroups:
+                      - !Ref BackendProxySecurityGroup
+                    Subnets:
+                      - !Ref SubnetA
+                      - !Ref SubnetB
+                LoadBalancers:
+                  - ContainerName: proxy
+                    ContainerPort: 8080
+                    TargetGroupArn: !Ref ProxyTargetGroup
+                DeploymentConfiguration:
+                  MaximumPercent: 200
+                  MinimumHealthyPercent: 100
+              DependsOn:
+                - TaskDefinitionProxy
+                - ProxyListenerRule
+                - ProxyTargetGroup
+            TaskDefinitionProxy:
+              Type: AWS::ECS::TaskDefinition
+              Properties:
+                ContainerDefinitions:
+                  - Essential: !!bool true
+                    Image: "#{Octopus.Action.Package[${local.backend_proxy_package_name}].Image}"
+                    Name: proxy
+                    ResourceRequirements: []
+                    Environment:
+                      - Name: DEFAULT_URL
+                        Value: !Sub "http://$${ApplicationLoadBalancer.DNSName}"
+                    EnvironmentFiles: []
+                    DisableNetworking: !!bool false
+                    DnsServers: []
+                    DnsSearchDomains: []
+                    ExtraHosts: []
+                    PortMappings:
+                      - ContainerPort: !!int 8080
+                        HostPort: !!int 8080
+                        Protocol: tcp
+                    LogConfiguration:
+                      LogDriver: awslogs
+                      Options:
+                        awslogs-group: !Ref CloudWatchLogsGroup
+                        awslogs-region: !Ref AWS::Region
+                        awslogs-stream-prefix: frontend-proxy-#{Octopus.Action[Get AWS Resources].Output.FixedEnvironment}
+                Family: !Sub $${TaskDefinitionName}-proxy
+                Cpu: 256
+                Memory: 512
+                ExecutionRoleArn: !Ref TaskExecutionRoleBackend
                 RequiresCompatibilities:
                   - FARGATE
                 NetworkMode: awsvpc
@@ -313,8 +508,9 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
               Type: String
             Vpc:
               Type: String
-            Listener:
+            MainListener:
               Type: String
+              Description: The shared listener for the top level load balancer
           Outputs:
             ServiceName:
               Description: The service name
@@ -322,8 +518,8 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
                 - ServiceBackend
                 - Name
         EOT
-        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"backend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
-        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"Listener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"backend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParameters" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"MainListener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"backend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
+        "Octopus.Action.Aws.CloudFormationTemplateParametersRaw" : "[{\"ParameterKey\":\"Vpc\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Vpc}\"},{\"ParameterKey\":\"MainListener\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.Listener}\"},{\"ParameterKey\":\"TaskDefinitionName\",\"ParameterValue\":\"backend\"},{\"ParameterKey\":\"TaskDefinitionCPU\",\"ParameterValue\":\"256\"},{\"ParameterKey\":\"TaskDefinitionMemory\",\"ParameterValue\":\"512\"},{\"ParameterKey\":\"SubnetA\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetA}\"},{\"ParameterKey\":\"SubnetB\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SubnetB}\"},{\"ParameterKey\":\"SecurityGroup\",\"ParameterValue\":\"#{Octopus.Action[Get AWS Resources].Output.SecurityGroup}\"}]"
         "Octopus.Action.Aws.IamCapabilities" : "[\"CAPABILITY_AUTO_EXPAND\",\"CAPABILITY_IAM\",\"CAPABILITY_NAMED_IAM\"]"
         "Octopus.Action.Aws.Region" : var.aws_region
         "Octopus.Action.Aws.TemplateSource" : "Inline"
@@ -387,10 +583,10 @@ resource "octopusdeploy_deployment_process" "deploy_backend" {
           # Load balancers can take a minute or so before their DNS is propagated.
           # A status code of 000 means curl could not resolve the DNS name, so we wait for a bit until DNS is updated.
           echo "Waiting for DNS to propagate. This can take a while for a new load balancer."
-          for i in {1..60}
+          for i in {1..30}
           do
               CODE=$(curl -o /dev/null -s -w "%%{http_code}\n" http://#{Octopus.Action[Get AWS Resources].Output.DNSName}/health/products/GET)
-              if [[ "$${CODE}" != "000" ]]
+              if [[ "$${CODE}" != "000" && "$${CODE}" != "502" ]]
               then
                 break
               fi
