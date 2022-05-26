@@ -310,7 +310,7 @@ resource "octopusdeploy_deployment_process" "deploy_backend_featurebranch" {
                         awslogs-group: !Ref CloudWatchLogsGroup
                         awslogs-region: !Ref AWS::Region
                         awslogs-stream-prefix: backend
-                Family: !Sub '${TaskDefinitionName}-${local.backend_dns_branch_name}'
+                Family: !Sub '$${TaskDefinitionName}-${local.backend_dns_branch_name}'
                 Cpu: !Ref TaskDefinitionCPU
                 Memory: !Ref TaskDefinitionMemory
                 ExecutionRoleArn: !Ref TaskExecutionRoleBackend
